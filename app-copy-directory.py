@@ -3,6 +3,7 @@ import argparse
 import os
 import shutil
 import hashlib, os
+from pathlib import Path
 
 parser = argparse.ArgumentParser(description='Manipulating with file structures.')
 parser.add_argument('-c', '--copy', dest='copy', nargs='+',
@@ -20,8 +21,16 @@ parser.add_argument('-s', '--sha', dest='sha', nargs='+',
                     help='[path to folder]'
                          'Create and md5 hash of the selected file or folder')
 
+parser.add_argument('-cs', '--checksha', dest='csha', nargs='+',
+                    help='[path to folder]'
+                         'Create and md5 hash of the selected file or folder')
+
+#Usefull variables initialization
 args = parser.parse_args()
-directory = args.sha[0]
+#directory = args.sha[0]
+directory = args.csha[0]
+home_directory = str(Path.home())
+
 #Copy argument usage
 def copy_directory():
     try:
@@ -49,27 +58,66 @@ def move_directory():
     except:
         print('Some problem occurs, please be sure that the paths of directories are correct')
 
+#Creating an md5 for the selected directory
 def craete_md5(directory, verbose=0):
-
+    sha_hash = hashlib.md5()
     if not os.path.exists(directory):
         print('Directory or file does not exist')
+        return
     try:
         for root, dirs, files in os.walk(directory):
             for names in files:
                 if verbose == 1:
                     print('Hashing', names)
-            filepath = os.path.join(root,names)
-            with(open(filepath, 'rb')) as file:
-                file_content = file.read()
-                SHAhash = hashlib.md5(file_content)
-                print(SHAhash.hexdigest())
+                filepath = os.path.join(root,names)
+                with(open(filepath, 'rb')) as file:
+                    #file_content = file.read()
+                    while True:
+                        buf = file.read(4096)
+                        if not buf : break
+                        sha_hash.update(buf)
     except:
         import traceback
     # Print the stack traceback
         traceback.print_exc()
         return -2
 
-    return SHAhash.hexdigest()
+    with(open(home_directory+'\md5-hashes.txt', 'w')) as hash_file:
+        hash_file.write(directory + ' ' + sha_hash.hexdigest())
+    return sha_hash.hexdigest()
+
+
+def check_md5(directory):
+    # Creating the dictionary of directories and its hashes
+    print('hello')
+    hash_dict = {}
+    with(open(home_directory+'\md5-hashes.txt')) as hash_file:
+        for line in hash_file:
+            (key, value) = line.split()
+            hash_dict[str(key)] = value
+
+    print(hash_dict.keys())
+    # if directory in hash_dict.keys():
+    #    print("Hash for this directory is already created")
+    # else:
+    #    craete_md5(directory, 1)
+
+    if directory not in hash_dict.keys():
+        print('Hash was not already created')
+        return
+
+    actual_hash = craete_md5(directory, 1)
+    stored_hash = hash_dict[directory]
+
+    if actual_hash != stored_hash:
+        print('Your file was corrupted!')
+
+    else:
+        print("Files was not corrupted")
+
+
+
+
 
 if args.copy != [] and args.copy != None:
     copy_directory()
@@ -77,3 +125,5 @@ elif args.move != [] and args.move != None:
     move_directory()
 elif args.sha !=  [] and args.sha != None:
     print(craete_md5(directory, 1))
+elif args.csha != [] and args.csha is not None:
+    check_md5(directory)
